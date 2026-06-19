@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Launcher for image_gen_cli.
+# Prefers the AOT-compiled binary (fast); falls back to `dart run`.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN="$HERE/build/image-gen"
+
+if [[ -x "$BIN" ]]; then
+  exec "$BIN" "$@"
+fi
+
+# No compiled binary yet — run from source (slower first run resolves deps).
+if [[ ! -d "$HERE/.dart_tool" ]]; then
+  (cd "$HERE" && dart pub get >/dev/null)
+fi
+exec dart run "$HERE/bin/image_gen.dart" "$@"

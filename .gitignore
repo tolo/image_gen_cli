@@ -1,0 +1,9 @@
+# Dart
+.dart_tool/
+build/
+
+# Agent scratch
+.agent_temp/
+
+# macOS
+.DS_Store
