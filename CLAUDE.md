@@ -60,3 +60,29 @@ Cross-platform release binaries (macOS arm64/x64, Linux arm64/x64, Windows x64) 
 ## Honesty
 
 Verify changes against the real gates above before claiming done. The `--check` probe and any live image generation require valid credentials and hit the network — say so if you skip them.
+
+## Project Document Index
+
+Paths AndThen workflow skills (clarify, spec, plan, etc.) read to locate project documents. Rows not listed use AndThen defaults if created later. Paths relative to repo root.
+
+| Document Type    | Location                           | Notes                                          |
+|------------------|------------------------------------|------------------------------------------------|
+| Stack            | `docs/STACK.md`                    | Technology stack + versions                    |
+| Key Dev Commands | `docs/KEY_DEVELOPMENT_COMMANDS.md` | Dev / test / build / run commands              |
+| Learnings        | `docs/LEARNINGS.md`                | Traps + error patterns ("watch out for X")     |
+| Guidelines       | `docs/guidelines/`                 | Development guidelines                          |
+| Specs & Plans    | `docs/specs/<feature>/`            | PRDs, plans, FIS (one per story)               |
+| State (local)    | `docs/STATE.local.md`              | Per-developer, **gitignored** session state    |
+| Agent Temp       | `.agent_temp/`                     | Temporary agent workspace (gitignored)         |
+
+## Project-Specific Guidelines and Rules
+
+Read the relevant guideline before starting work of its type:
+
+- `docs/guidelines/CRITICAL-RULES-AND-GUARDRAILS.md` — always-on rules (also in `~/.claude/CLAUDE.md`)
+- `docs/guidelines/DEVELOPMENT-ARCHITECTURE-GUIDELINES.md` — when coding/architecting
+
+### Do Not / Never
+- Never rename the OpenAI model IDs (`gpt-image-2`, `gpt-image-1`) or the `$GPT_IMAGE_MODEL` / `$GPT_IMAGE_CHAT_MODEL` env vars — they are the tool's public interface.
+- Never log or print the bearer token / `auth.json` contents — they are live secrets.
+- Never retry the documented dead ends (top-level image model → 400; `codex/images/generations` → 404) — see "Load-bearing facts" above.

@@ -7,3 +7,6 @@ build/
 
 # macOS
 .DS_Store
+
+# AndThen session-local state (per-developer)
+docs/STATE.local.md
