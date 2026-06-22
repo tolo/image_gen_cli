@@ -1,0 +1,214 @@
+name: Release Binaries
+# Action-update process: to bump a pinned action, re-resolve the tag to its current SHA with
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+# then update both the SHA and the trailing # vX comment on the uses: line.
+#
+# Triggered by pushing a tag like `v0.1.0`. The tag must match `version:` in pubspec.yaml.
+# Homebrew/Scoop publishing is skipped automatically if TAP_TOKEN is not configured.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  HOMEBREW_TAP_REPO: tolo/homebrew-image-gen
+  SCOOP_TAP_REPO: tolo/scoop-image-gen
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Read and verify version
+        id: read
+        run: |
+          VERSION=$(grep -m1 '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//')
+          if [ -z "$VERSION" ]; then echo "No version in pubspec.yaml" >&2; exit 1; fi
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$TAG_VERSION" != "$VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pubspec version $VERSION" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: version
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs_on: macos-15
+            target: macos-arm64
+          - runs_on: macos-15-intel
+            target: macos-x64
+          - runs_on: ubuntu-latest
+            target: linux-x64
+          - runs_on: ubuntu-latest
+            target: linux-arm64
+          - runs_on: windows-latest
+            target: windows-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: 3.12.0
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Build release artifact
+        run: dart run tool/build_release.dart
+        env:
+          IMAGE_GEN_RELEASE_TARGET: ${{ matrix.target }}
+
+      - name: Publish release asset
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: build/image-gen-v*-${{ matrix.target }}.*
+
+  checksums:
+    name: Publish aggregate checksums
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release checksum assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p release-checksums
+          gh release download "$TAG_NAME" --pattern '*.sha256' --dir release-checksums
+
+      - name: Build aggregate SHA256SUMS.txt
+        run: |
+          cat release-checksums/*.sha256 | LC_ALL=C sort > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish SHA256SUMS.txt
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: SHA256SUMS.txt
+
+  homebrew:
+    name: Update Homebrew tap
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: 3.12.0
+
+      - name: Download platform checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p tap-checksums
+          gh release download "$TAG_NAME" --pattern 'image-gen-v*-macos-*.tar.gz.sha256' --dir tap-checksums
+          gh release download "$TAG_NAME" --pattern 'image-gen-v*-linux-*.tar.gz.sha256' --dir tap-checksums
+
+      - name: Render formula
+        run: |
+          dart run tool/render_homebrew_formula.dart \
+            --version "${{ needs.version.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --checksums-dir tap-checksums \
+            --output image-gen.rb
+          cat image-gen.rb
+
+      - name: Publish formula to tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "TAP_TOKEN not configured; skipping Homebrew tap update." >&2
+            exit 0
+          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git" tap-repo
+          mkdir -p tap-repo/Formula
+          cp image-gen.rb tap-repo/Formula/image-gen.rb
+          cd tap-repo
+          git add Formula/image-gen.rb
+          if git diff --cached --quiet; then
+            echo "Formula already current for ${VERSION}; nothing to push."
+          else
+            git commit -m "image-gen ${VERSION}"
+            git push
+          fi
+
+  scoop:
+    name: Update Scoop bucket
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: 3.12.0
+
+      - name: Download Windows checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p tap-checksums
+          gh release download "$TAG_NAME" --pattern 'image-gen-v*-windows-x64.zip.sha256' --dir tap-checksums
+
+      - name: Render manifest
+        run: |
+          dart run tool/render_scoop_manifest.dart \
+            --version "${{ needs.version.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --checksums-dir tap-checksums \
+            --output image-gen.json
+          cat image-gen.json
+
+      - name: Publish manifest to bucket
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "TAP_TOKEN not configured; skipping Scoop bucket update." >&2
+            exit 0
+          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${SCOOP_TAP_REPO}.git" bucket-repo
+          mkdir -p bucket-repo/bucket
+          cp image-gen.json bucket-repo/bucket/image-gen.json
+          cd bucket-repo
+          git add bucket/image-gen.json
+          if git diff --cached --quiet; then
+            echo "Manifest already current for ${VERSION}; nothing to push."
+          else
+            git commit -m "image-gen ${VERSION}"
+            git push
+          fi

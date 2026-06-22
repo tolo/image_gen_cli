@@ -4,6 +4,7 @@ import 'package:args/args.dart';
 
 import 'package:image_gen_cli/src/codex_auth.dart';
 import 'package:image_gen_cli/src/image_client.dart';
+import 'package:image_gen_cli/src/version.dart';
 
 const _aspectToSize = {
   'square': '1024x1024',
@@ -29,6 +30,11 @@ Future<int> main(List<String> argv) async {
 
   if (args.flag('help')) {
     _printUsage(parser);
+    return 0;
+  }
+
+  if (args.flag('version')) {
+    stdout.writeln('image-gen $imageGenVersion');
     return 0;
   }
 
@@ -214,6 +220,7 @@ ArgParser _buildParser() {
     ..addFlag('use-key', negatable: false, help: 'Use the API key found in auth.json / env instead of OAuth.')
     ..addFlag('check', negatable: false, help: 'Probe whether image generation is reachable, then exit.')
     ..addFlag('verbose', abbr: 'v', negatable: false, help: 'Verbose output.')
+    ..addFlag('version', negatable: false, help: 'Print version and exit.')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show usage.');
 }
 

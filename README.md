@@ -43,13 +43,41 @@ credentials exist. Tokens are refreshed automatically against
 
 ## Install
 
+Prebuilt binaries are published for **macOS** (arm64/x64), **Linux** (arm64/x64),
+and **Windows** (x64) on each [GitHub release](https://github.com/tolo/image_gen_cli/releases).
+
+**Homebrew** (macOS / Linux):
+
+```bash
+brew install tolo/image-gen/image-gen
+```
+
+**Scoop** (Windows):
+
+```powershell
+scoop bucket add image-gen https://github.com/tolo/scoop-image-gen
+scoop install image-gen
+```
+
+**Manual download:** grab the archive for your platform from the release page,
+verify it against `SHA256SUMS.txt`, extract, and put `image-gen` on your `PATH`:
+
+```bash
+tar xzf image-gen-v<version>-<os>-<arch>.tar.gz     # .zip on Windows
+sudo mv image-gen /usr/local/bin/
+image-gen --version
+```
+
+**Build from source** (needs the Dart SDK `^3.6.0`):
+
 ```bash
 cd ~/Repos/Tools/image_gen_cli
-./build.sh                                          # compiles build/image-gen (native AOT)
-ln -sf "$PWD/image-gen" /usr/local/bin/image-gen    # optional: put on PATH
+./build.sh                                           # compiles build/image-gen (native AOT)
+ln -sf "$PWD/image-gen" /usr/local/bin/image-gen     # optional: put on PATH
 ```
 
 The `image-gen` launcher runs the compiled binary if present, else `dart run`.
+See [docs/RELEASING.md](docs/RELEASING.md) for how releases are cut.
 
 ## Usage
 
@@ -82,6 +110,7 @@ image-gen "a logo" --api-key sk-... -m gpt-image-1
 | `--use-key` | Use the API key found in `auth.json`/env instead of OAuth | |
 | `--check` | Probe reachability, then exit | |
 | `-v, --verbose` | Verbose output | |
+| `--version` | Print version, then exit | |
 
 **Aspect → size mapping** (GPT-Image supports only fixed sizes, not free-form
 aspect ratios): `square→1024x1024`, `portrait→1024x1536`,
@@ -116,3 +145,7 @@ This relies on the same first-party Codex transport the `codex` CLI uses
 (including spoofing the `codex_cli_rs` originator to pass Cloudflare). The
 Codex backend's accepted chat-model allow-list is undocumented and drifts;
 `--chat-model` exists so you can track it without rebuilding.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

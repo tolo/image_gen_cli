@@ -1,0 +1,39 @@
+name: Checks
+# Action-update process: to bump a pinned action, re-resolve the tag to its current SHA with
+#   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+# then update both the SHA and the trailing # vX comment on the uses: line.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: 3.12.0
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Sync version
+        run: dart run tool/sync_version.dart
+
+      - name: Verify version.dart in sync
+        run: git diff --exit-code lib/src/version.dart
+
+      - name: Format check
+        run: dart format --line-length=120 --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: dart analyze --fatal-infos
+
+      - name: Test
+        run: dart test
